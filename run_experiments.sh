@@ -4,6 +4,7 @@
 #
 # Usage:
 #   bash run_experiments.sh
+#   CUDA_ARCHITECTURES=86 bash run_experiments.sh
 #
 # Adjust the variables in the CONFIG section before running.
 # Results are appended to CSV files inside the RESULTS_DIR.
@@ -13,7 +14,10 @@ set -euo pipefail
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 BINARY="./build/sort_bench"
+BUILD_DIR="./build"
 RESULTS_DIR="./results"
+PLOT_VENV_DIR="./.venv"
+CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES:-}"
 SYSTEM_INFO_FILE="$RESULTS_DIR/system_info.txt"
 RESULTS_CSV="$RESULTS_DIR/results.csv"
 REPEATS=5
@@ -103,12 +107,90 @@ merge_results_csv() {
     done
 }
 
-# Ensure the binary exists
-if [[ ! -x "$BINARY" ]]; then
-    echo "[ERROR] Binary not found: $BINARY"
-    echo "        Run: cmake --build build -j\$(nproc)"
-    exit 1
-fi
+resolve_binary_path() {
+    local candidates=(
+        "$BINARY"
+        "$BUILD_DIR/Release/sort_bench"
+        "$BUILD_DIR/Debug/sort_bench"
+        "$BUILD_DIR/RelWithDebInfo/sort_bench"
+        "$BUILD_DIR/MinSizeRel/sort_bench"
+    )
+
+    for candidate in "${candidates[@]}"; do
+        if [[ -x "$candidate" ]]; then
+            BINARY="$candidate"
+            return 0
+        fi
+    done
+
+    if [[ -d "$BUILD_DIR" ]]; then
+        local discovered=""
+        discovered="$(find "$BUILD_DIR" -maxdepth 3 -type f -name sort_bench -perm -111 2>/dev/null | head -n 1 || true)"
+        if [[ -n "$discovered" ]]; then
+            BINARY="$discovered"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+ensure_binary() {
+    if resolve_binary_path; then
+        echo "[INFO] Using binary: $BINARY"
+        return 0
+    fi
+
+    echo "[INFO] Binary not found, attempting configure+build..."
+
+    if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]]; then
+        if [[ -n "$CUDA_ARCHITECTURES" ]]; then
+            echo "[INFO] Configuring CMake with CUDA architectures: $CUDA_ARCHITECTURES"
+            cmake -S . -B "$BUILD_DIR" -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCHITECTURES"
+        else
+            cmake -S . -B "$BUILD_DIR"
+        fi
+    fi
+
+    cmake --build "$BUILD_DIR" -j"$(nproc)"
+
+    if ! resolve_binary_path; then
+        echo "[ERROR] Binary not found after build. Expected target: sort_bench"
+        echo "        Checked under: $BUILD_DIR"
+        exit 1
+    fi
+
+    echo "[INFO] Using binary: $BINARY"
+}
+
+setup_plot_python_env() {
+    local host_python=""
+
+    if command -v python3 >/dev/null 2>&1; then
+        host_python="python3"
+    elif command -v python >/dev/null 2>&1; then
+        host_python="python"
+    else
+        echo "[WARN] Python interpreter not found. Skipping plot generation."
+        return 1
+    fi
+
+    if [[ ! -x "$PLOT_VENV_DIR/bin/python" ]]; then
+        echo "[INFO] Creating Python virtual environment at: $PLOT_VENV_DIR"
+        "$host_python" -m venv "$PLOT_VENV_DIR"
+    fi
+
+    PLOT_PYTHON="$PLOT_VENV_DIR/bin/python"
+    if ! "$PLOT_PYTHON" -c "import pandas, matplotlib, seaborn" >/dev/null 2>&1; then
+        echo "[INFO] Installing plotting dependencies (pandas, matplotlib, seaborn)..."
+        "$PLOT_PYTHON" -m pip install --upgrade pip
+        "$PLOT_PYTHON" -m pip install pandas matplotlib seaborn
+    fi
+
+    return 0
+}
+
+ensure_binary
 
 mkdir -p "$RESULTS_DIR"
 
@@ -179,6 +261,19 @@ for dist in "${DISTRIBUTIONS[@]}"; do
 done
 
 merge_results_csv
+
+echo ""
+echo "[POST] Generating plots"
+if [[ -f "./plot_results.py" ]]; then
+    PLOT_PYTHON=""
+    if setup_plot_python_env; then
+        if ! "$PLOT_PYTHON" ./plot_results.py; then
+            echo "[WARN] Plot generation failed. You can retry manually: $PLOT_PYTHON plot_results.py"
+        fi
+    fi
+else
+    echo "[WARN] plot_results.py not found. Skipping plot generation."
+fi
 
 echo ""
 echo "============================================================"

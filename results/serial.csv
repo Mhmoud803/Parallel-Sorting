@@ -1,0 +1,17 @@
+impl,size,distribution,seed,threads,block_size,repeats,avg_ms
+serial,1000000,uniform,42,1,256,5,95.0133
+serial,4000000,uniform,42,1,256,5,350.4731
+serial,16000000,uniform,42,1,256,5,1702.5582
+serial,64000000,uniform,42,1,256,5,7148.5895
+serial,1000000,gaussian,42,1,256,5,79.8319
+serial,4000000,gaussian,42,1,256,5,358.4556
+serial,16000000,gaussian,42,1,256,5,1565.3351
+serial,64000000,gaussian,42,1,256,5,6364.3668
+serial,1000000,nearly_sorted,42,1,256,5,12.2804
+serial,4000000,nearly_sorted,42,1,256,5,73.9495
+serial,16000000,nearly_sorted,42,1,256,5,394.3067
+serial,64000000,nearly_sorted,42,1,256,5,1119.6289
+serial,1000000,reversed,42,1,256,5,7.6817
+serial,4000000,reversed,42,1,256,5,38.4690
+serial,16000000,reversed,42,1,256,5,164.8489
+serial,64000000,reversed,42,1,256,5,860.1496

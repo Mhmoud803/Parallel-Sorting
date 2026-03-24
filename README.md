@@ -155,7 +155,4 @@ serial,10000000,gaussian,42,1,256,5,342.17
 
 ---
 
-## Correctness
 
-Every run verifies the sorted output element-by-element against the `std::sort` reference.
-A non-zero exit code (`2`) indicates a correctness failure.

@@ -49,7 +49,7 @@ project2-sort/
 For most users, one command is enough after cloning:
 
 ```bash
-cd project2-sort
+cd Parallel-Sorting
 bash run_experiments.sh
 ```
 

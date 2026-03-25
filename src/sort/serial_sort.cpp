@@ -3,9 +3,41 @@
 #include <algorithm>
 #include <iostream>
 
+namespace {
+
+void serial_merge_sort_recursive(std::vector<int>& arr,
+                                 std::vector<int>& scratch,
+                                 std::size_t left,
+                                 std::size_t right) {
+    // Sort range [left, right) using divide-and-conquer.
+    if (right - left <= 1) {
+        return;
+    }
+
+    const std::size_t mid = left + (right - left) / 2;
+    serial_merge_sort_recursive(arr, scratch, left, mid);
+    serial_merge_sort_recursive(arr, scratch, mid, right);
+
+    std::merge(arr.begin() + static_cast<std::ptrdiff_t>(left),
+               arr.begin() + static_cast<std::ptrdiff_t>(mid),
+               arr.begin() + static_cast<std::ptrdiff_t>(mid),
+               arr.begin() + static_cast<std::ptrdiff_t>(right),
+               scratch.begin() + static_cast<std::ptrdiff_t>(left));
+
+    std::copy(scratch.begin() + static_cast<std::ptrdiff_t>(left),
+              scratch.begin() + static_cast<std::ptrdiff_t>(right),
+              arr.begin() + static_cast<std::ptrdiff_t>(left));
+}
+
+} // namespace
+
 void serial_sort(std::vector<int>& arr) {
-    // std::sort uses introsort: O(n log n) worst-case, cache-friendly.
-    std::sort(arr.begin(), arr.end());
+    if (arr.size() <= 1) {
+        return;
+    }
+
+    std::vector<int> scratch(arr.size());
+    serial_merge_sort_recursive(arr, scratch, 0, arr.size());
 }
 
 bool verify_sorted(const std::vector<int>& reference,

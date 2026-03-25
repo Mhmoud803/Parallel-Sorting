@@ -1,7 +1,0 @@
-/home/mahmoud/Parallel-Sorting/build/CMakeFiles/sort_bench.dir
-/home/mahmoud/Parallel-Sorting/build/CMakeFiles/edit_cache.dir
-/home/mahmoud/Parallel-Sorting/build/CMakeFiles/rebuild_cache.dir
-/home/mahmoud/Parallel-Sorting/build/CMakeFiles/list_install_components.dir
-/home/mahmoud/Parallel-Sorting/build/CMakeFiles/install.dir
-/home/mahmoud/Parallel-Sorting/build/CMakeFiles/install/local.dir
-/home/mahmoud/Parallel-Sorting/build/CMakeFiles/install/strip.dir

@@ -32,7 +32,7 @@ CUDA_BLOCK_SIZES=(128 256 512)
 append_system_info() {
     {
         echo "============================================================"
-        echo "Project 2 System Information"
+        echo "System Information"
         echo "Timestamp (UTC): $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
         echo "Hostname       : $(hostname)"
         echo "Kernel         : $(uname -srmo)"

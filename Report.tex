@@ -21,12 +21,12 @@
 
 \title{\textbf{Performance Analysis: OpenMP MergeSort vs. CUDA Bitonic Sort}\\
 \vspace{0.5em}
-\Large Project 2 - High-Performance Computing}
+\Large  High-Performance Computing}
 
 \author{
     \textbf{Abdulrahman Osama Adel} (B.N.: 13) \\
     \textbf{Mahmoud Atef Mahmoud AbdelAziz} (B.N.: 33) \\
-    \textbf{Mohamed Alaa Ahmed Refaee} (B.N.: 30) 
+    \textbf{Mohamed Alaa Ahmed Refaee} (B.N.: 30)
 }
 \date{\today}
 
@@ -50,7 +50,7 @@ To ensure reproducibility, all experiments were executed on a dedicated benchmar
 \end{itemize}
 
 \subsection{Measurement Strategy}
-Execution times were recorded strictly for the compute phase. For CUDA implementations, the recorded time includes Host-to-Device and Device-to-Host memory transfers, simulating a realistic offloading penalty. Each experimental condition was executed 5 times, and the average execution time is reported to mitigate OS jitter. All benchmark points were measured with \texttt{repeats = 5}, matching the experiment driver configuration.
+Execution times were recorded strictly for the end-to-end sorting phase. For CUDA implementations, this total execution time explicitly includes Host-to-Device and Device-to-Host memory transfers to simulate a realistic offloading penalty. Furthermore, internal CUDA event timers were implemented to profile the exact ratio of kernel execution time versus memory transfer time, allowing us to report the pure compute percentage in the application's output logs. Each experimental condition was executed 5 times, and the average execution time is reported to mitigate OS jitter. All benchmark points were measured with \texttt{repeats = 5}, matching the experiment driver configuration.
 
 \section{Algorithm Design and Implementation Details}
 
@@ -97,11 +97,11 @@ Figure \ref{fig:plot_b} demonstrates the speedup achieved by OpenMP relative to 
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.8\textwidth]{plot_b_openmp_speedup_vs_threads.png}
-\caption{OpenMP Speedup vs. Number of Threads for $N = 64,000,000$.}
+\caption{OpenMP Speedup vs. Number of Threads for $N = 67,108,864$.}
 \label{fig:plot_b}
 \end{figure}
 
-As observed, speedup improves clearly from 1 to 2 threads, then exhibits diminishing and workload-dependent gains at higher thread counts (4, 8, and 16). This behavior is consistent with overheads from task management, synchronization, and memory-system limits, so scaling is not perfectly linear at high thread counts. Consequently, for the analyzed large-size setting (especially the uniform-distribution case used in the scaling plots), OpenMP remains less efficient than the CUDA implementation.
+As observed, the speedup scales continuously as the thread count increases, reaching a peak speedup of 4.81x at 16 threads for the 67.1-million element array. While the performance consistently improves, the scaling is sub-linear (experiencing diminishing returns). This behavior is consistent with overheads from task management, synchronization bottlenecks during the merge phase, and memory bandwidth limits. Even at its peak 16-thread performance, OpenMP remains less efficient than the GPU-accelerated CUDA implementation for this massive dataset.
 
 \subsection{CUDA Block Size Optimization}
 Figure \ref{fig:plot_c} analyzes the impact of varying CUDA block sizes (128, 256, 512). 
@@ -109,18 +109,18 @@ Figure \ref{fig:plot_c} analyzes the impact of varying CUDA block sizes (128, 25
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.8\textwidth]{plot_c_cuda_execution_time_vs_block_size.png}
-\caption{CUDA Execution Time across different Block Sizes.}
+\caption{CUDA Execution Time across different Block Sizes for $N = 67,108,864$.}
 \label{fig:plot_c}
 \end{figure}
 
-The differences in execution time across block sizes highlight the importance of occupancy and warp scheduling. Empirically, block sizes of 256 and 512 were generally close and often outperformed 128 for the $64{,}000{,}000$-element case, though the best choice varied slightly by distribution and run.
+The differences in execution time across block sizes highlight the importance of occupancy and warp scheduling. As shown in the empirical data for the uniform 67.1-million element array, increasing the block size steadily improved performance. A block size of 512 yielded the optimal execution time (approximately 1052 ms), outperforming both 256 (1057 ms) and 128 (1078 ms). This indicates that 512 threads per block achieved the most effective Streaming Multiprocessor (SM) occupancy on the target hardware, allowing the GPU scheduler to optimally hide global memory latency during the bitonic network operations.
 
 \subsection{Algorithmic Scaling: Bitonic vs. MergeSort}
 A critical observation in the benchmark data is how the two algorithms scale differently depending on the input data distribution. 
 
 MergeSort's performance is heavily data-dependent. As seen in the serial results, pre-sorted or reversed data requires drastically less time than uniformly random data. While the fundamental theoretical time complexity remains $O(N \log N)$, the structured data highly benefits modern CPU branch predictors during the merge step. However, scaling it across many CPU cores is hindered by the synchronization required to merge large adjacent sub-arrays.
 
-Conversely, Bitonic Sort is a data-independent sorting network. It performs the exact same number of predetermined compare-and-swap operations regardless of whether the initial array is random or nearly sorted. While its theoretical time complexity $O(N \log^2 N)$ requires more total operations than MergeSort, it scales exceptionally well on GPUs. The SIMT (Single Instruction, Multiple Threads) architecture of the GPU can execute these non-branching operations in parallel across thousands of cores without thread divergence, allowing CUDA to massively outperform the CPU on large datasets despite the PCIe memory transfer penalties.
+Conversely, Bitonic Sort is a data-independent sorting network. It performs the exact same number of predetermined compare-and-swap operations regardless of whether the initial array is random or nearly sorted. While its theoretical time complexity $O(N \log^2 N)$ requires more total operations than MergeSort, it scales exceptionally well on GPUs. The SIMT (Single Instruction, Multiple Threads) architecture of the GPU can execute these non-branching operations in parallel across thousands of cores without thread divergence, allowing CUDA to massively outperform the CPU on large datasets despite the PCIe memory transfer penalties. For instance, on the 67.1-million element uniform array, the CUDA Bitonic Sort achieved an execution time of ~1052 ms compared to the serial baseline's ~6300 ms, yielding a massive speedup of approximately 6.0x despite the PCI-e overhead.
 
 \section{Conclusion}
 This project successfully validated the implementation of OpenMP and CUDA sorting algorithms against a serial baseline. The experiment matrix confirmed that while CPU parallelism (OpenMP) is effective for moderate workloads, it is ultimately constrained by serial merge bottlenecks. GPU acceleration (CUDA) utilizing sorting networks like Bitonic Sort provides superior scaling for massive datasets, provided the compute gains outweigh the host-to-device memory transfer overhead.

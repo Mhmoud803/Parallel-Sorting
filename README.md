@@ -1,37 +1,50 @@
-# Project 2 — OpenMP MergeSort vs CUDA Bitonic Sort
+# OpenMP MergeSort vs CUDA Bitonic Sort
 
-Benchmarks a parallel **merge sort** (OpenMP) against a **bitonic sort** (CUDA), with a `std::sort`-based serial baseline for correctness verification and timing reference.
+A High-Performance Computing (HPC) benchmarking project comparing a CPU-parallel **OpenMP MergeSort** against a GPU-accelerated **CUDA Bitonic Sort**. The parallel implementations are evaluated against a highly optimized, custom **Serial MergeSort** baseline for correctness verification and precise speedup calculations.
 
 ---
 
-## Directory Layout
+## 🚀 Key Architectural Optimizations
+
+This project implements several advanced HPC techniques to maximize hardware utilization:
+
+* **Optimized Memory Management (Serial & OpenMP):** Completely eliminates dynamic memory allocation inside the recursion tree. A single `scratch` array is allocated once in the wrapper function and passed by reference.
+* **Manual Index-Based Merge:** Replaces abstraction-heavy `std::merge` with a highly efficient, custom `i, j, k` merge loop.
+* **OpenMP Task Parallelism:** Utilizes `#pragma omp task` for recursive divide-and-conquer branching, coupled with an **Adaptive Serial Cutoff** to prevent task-creation overhead on small sub-arrays.
+* **CUDA Shared Memory Tiling:** The Bitonic Sort network accelerates early, dense compare-and-swap stages by loading `2 * block_size` tiles into extremely fast `__shared__` memory before falling back to global memory for larger strides.
+* **CUDA Arbitrary Size Padding:** Supports non-power-of-two array sizes (up to 67.1M+ elements) by implicitly padding the problem space with `INT_MAX` sentinels, which naturally migrate to the end of the sorted array without disrupting valid data.
+* **Kernel Profiling:** Implements native `cudaEvent_t` timers to explicitly decouple and report pure GPU kernel compute percentage versus Host-to-Device / Device-to-Host memory transfer penalties.
+
+---
+
+## 📁 Directory Layout
 
 ```text
 project2-sort/
 ├── CMakeLists.txt
 ├── README.md
-├── run_experiments.sh        # Reproducible experiment driver (supports nsys profiling)
-├── results/                  # CSV output lives here (git-ignored)
+├── run_experiments.sh        # Reproducible experiment driver (Compiles, Runs, Plots)
+├── results/                  # CSV outputs and generated Matplotlib plots live here
 └── src/
-    ├── main.cpp              # Entry point: ties CLI → data → sort → verify → output
+    ├── main.cpp              # Entry point: CLI args → Generate Data → Sort → Verify
     ├── cli/
-    │   ├── cli.hpp           # Config struct + parse_args declaration
-    │   └── cli.cpp           # Argument parsing implementation
+    │   ├── cli.hpp           
+    │   └── cli.cpp           # CLI Argument parsing implementation
     ├── data/
-    │   ├── generator.hpp     # generate_array declaration
+    │   ├── generator.hpp     
     │   └── generator.cpp     # Uniform / Gaussian / NearlySorted / Reversed generators
     └── sort/
-        ├── serial_sort.hpp   # serial_sort + verify_sorted declarations
-        ├── serial_sort.cpp   # std::sort wrapper + element-wise verifier
-        ├── omp_sort.hpp      # omp_merge_sort declaration  (stub)
-        ├── omp_sort.cpp      # OpenMP merge sort           (stub — Phase 2)
-        ├── cuda_sort.hpp     # cuda_bitonic_sort declaration (stub)
-        └── cuda_sort.cu      # CUDA bitonic sort            (stub — Phase 2)
+        ├── serial_sort.hpp   
+        ├── serial_sort.cpp   # Custom recursive MergeSort + element-wise verifier
+        ├── omp_sort.hpp      
+        ├── omp_sort.cpp      # Task-based OpenMP MergeSort with adaptive cutoff
+        ├── cuda_sort.hpp     
+        └── cuda_sort.cu      # Hybrid Shared/Global memory CUDA Bitonic Sort
 ```
 
 ---
 
-## Prerequisites
+## 🛠️ Prerequisites
 
 | Tool | Minimum version |
 |------|-----------------|
@@ -40,119 +53,70 @@ project2-sort/
 | CUDA Toolkit | 11.0 |
 | OpenMP | 4.5 |
 
+*(Developed and tested on Ubuntu 24.04 LTS, AMD Ryzen 7 5800H, and NVIDIA RTX 3050).*
+
 ---
+## ⚙️ Build & Run
 
-## Build
+### Quick Start (Automated Benchmark)
 
-### Quick Start (Recommended)
-
-For most users, one command is enough after cloning:
+For a fully automated pipeline that builds the project, runs the entire experiment matrix, and generates performance plots:
 
 ```bash
-cd Parallel-Sorting
 bash run_experiments.sh
 ```
 
-What this script does automatically:
-- finds or builds `sort_bench`
-- runs all benchmark phases (Serial, OpenMP, CUDA)
-- merges CSV outputs into `results/results.csv`
-- creates a local Python virtual environment in `.venv` (if missing)
-- installs plotting dependencies (`pandas`, `matplotlib`, `seaborn`) in that venv
-- generates plots in `results/plots/`
+**What this script does automatically:**
+1. Configures and builds `sort_bench`. (CMake auto-detects your GPU architecture).
+2. Executes the Serial, OpenMP, and CUDA benchmarks across varying sizes and distributions.
+3. Consolidates outputs into `results/results.csv`.
+4. Creates a Python virtual environment (`.venv`), installs plotting dependencies.
+5. Generates the final Speedup and Execution Time plots in `results/plots/`.
 
-If your GPU architecture is not detected correctly by default (for example, on an RTX 30-series card), specify the architecture explicitly:
-
-```bash
-CUDA_ARCHITECTURES=86 bash run_experiments.sh
-```
-
-Common values: `75` (Turing), `80` (Ampere/A100), `86` (RTX 30xx), `89` (RTX 40xx).
+*(Note: If CMake fails to auto-detect your GPU architecture, you can override it manually. For example, for an RTX 30-series card: `CUDA_ARCHITECTURES=86 bash run_experiments.sh`)*
 
 ---
 
-### Manual Build (Alternative)
+### Manual Execution (CLI Usage)
+
+If you wish to build manually and run specific benchmark configurations:
 
 ```bash
-# 1. Clone / enter the project
-cd project2-sort
-
-# 2. Configure (defaulting to Ampere / RTX 30-series architecture)
-cmake -S . -B build \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_CUDA_ARCHITECTURES=86   # 75=Turing, 80=Ampere, 86=RTX30, 89=RTX40
-
-# 3. Compile
+# 1. Configure and Build (CMake will auto-detect the host GPU architecture)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 
-# The binary is at: build/sort_bench
-```
-
----
-
-## Run
-
-### Synopsis
-
-```text
+# 2. Run a specific test (e.g., CUDA Bitonic Sort, 67.1M elements, Reversed data)
 ./build/sort_bench \
-    --size         <N>        \
-    --distribution <dist>     \
-    --seed         <INT>      \
-    --impl         <impl>     \
-    [--threads     <T>]       \
-    [--block-size  <B>]       \
-    [--repeats     <R>]       \
-    [--output      <file.csv>]
+    --size 67108864 \
+    --distribution reversed \
+    --impl cuda \
+    --block-size 512 \
+    --repeats 5 \
+    --output results/cuda.csv
 ```
-
-### Flag Reference
+### CLI Flag Reference
 
 | Flag | Values | Default | Description |
 |------|--------|---------|-------------|
-| `--size` | positive int | **required** | Number of elements |
-| `--distribution` | `uniform` `gaussian` `nearly_sorted` `reversed` | `uniform` | Input distribution |
+| `--size` | positive int | **required** | Number of elements to sort |
+| `--distribution` | `uniform` `gaussian` `nearly_sorted` `reversed` | `uniform` | Input data distribution |
 | `--seed` | int | `42` | RNG seed for reproducibility |
-| `--impl` | `serial` `omp` `cuda` | `serial` | Sort implementation |
-| `--threads` | int | `1` | OMP thread count |
-| `--block-size` | int | `256` | CUDA threads per block |
-| `--repeats` | int | `1` | Timing repetitions (averaged) |
-| `--output` | path | *(none)* | Append CSV row to this file |
-
-### Examples
-
-```bash
-# Serial baseline, 10 M elements, Gaussian distribution
-./build/sort_bench --size 10000000 --distribution gaussian --impl serial --repeats 5
-
-# OpenMP merge sort, 4 threads, uniform, write CSV
-./build/sort_bench --size 10000000 --distribution uniform --impl omp \
-    --threads 4 --repeats 5 --output results/omp.csv
-
-# CUDA bitonic sort
-./build/sort_bench --size 16777216 --distribution reversed --impl cuda \
-    --block-size 256 --repeats 5 --output results/cuda.csv
-```
-
-### Reproduce All Experiments
-
-```bash
-bash run_experiments.sh
-```
-
-Results are written to `results/` as CSV files suitable for plotting.
+| `--impl` | `serial` `omp` `cuda` | `serial` | Target sorting algorithm |
+| `--threads` | int | `1` | OpenMP thread count |
+| `--block-size` | int | `256` | CUDA threads per block (Optimized: 512) |
+| `--repeats` | int | `1` | Number of execution repetitions for averaging |
+| `--output` | path | *(none)* | Filepath to append CSV metrics |
 
 ---
 
-## Output Format
+## 📊 Output Example
 
-Each `--output` file is a CSV with one row per invocation:
-
+**Standard Output (Terminal):**
 ```text
-impl,size,distribution,seed,threads,block_size,repeats,avg_ms
-serial,10000000,gaussian,42,1,256,5,342.17
+[INFO]  Generating 67108864 elements (uniform, seed=42) ...
+[INFO]  Running 'cuda' for 5 repeat(s) ...
+[CUDA Metrics] Compute Percentage: 84.1% (Compute=885.4 ms, Transfer=167.3 ms)
+[RESULT] average = 1052.7 ms
+[VERIFY] Correctness check PASSED.
 ```
-
----
-
-

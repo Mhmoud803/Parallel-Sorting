@@ -1,56 +1,70 @@
 #include "sort/serial_sort.hpp"
 
-#include <algorithm>
 #include <iostream>
+using namespace std;
 
 namespace {
 
-void serial_merge_sort_recursive(std::vector<int>& arr,
-                                 std::vector<int>& scratch,
-                                 std::size_t left,
-                                 std::size_t right) {
+void serial_merge_sort_recursive(vector<int>& arr,
+                                 vector<int>& scratch,
+                                 size_t left,
+                                 size_t right) {
     // Sort range [left, right) using divide-and-conquer.
     if (right - left <= 1) {
         return;
     }
 
-    const std::size_t mid = left + (right - left) / 2;
+    const size_t mid = left + (right - left) / 2;
     serial_merge_sort_recursive(arr, scratch, left, mid);
     serial_merge_sort_recursive(arr, scratch, mid, right);
 
-    std::merge(arr.begin() + static_cast<std::ptrdiff_t>(left),
-               arr.begin() + static_cast<std::ptrdiff_t>(mid),
-               arr.begin() + static_cast<std::ptrdiff_t>(mid),
-               arr.begin() + static_cast<std::ptrdiff_t>(right),
-               scratch.begin() + static_cast<std::ptrdiff_t>(left));
+    size_t i = left;
+    size_t j = mid;
+    size_t k = left;
 
-    std::copy(scratch.begin() + static_cast<std::ptrdiff_t>(left),
-              scratch.begin() + static_cast<std::ptrdiff_t>(right),
-              arr.begin() + static_cast<std::ptrdiff_t>(left));
+    while (i < mid && j < right) {
+        if (arr[i] <= arr[j]) {
+            scratch[k++] = arr[i++];
+        } else {
+            scratch[k++] = arr[j++];
+        }
+    }
+
+    while (i < mid) {
+        scratch[k++] = arr[i++];
+    }
+
+    while (j < right) {
+        scratch[k++] = arr[j++];
+    }
+
+    for (size_t idx = left; idx < right; ++idx) {
+        arr[idx] = scratch[idx];
+    }
 }
 
 } // namespace
 
-void serial_sort(std::vector<int>& arr) {
+void serial_sort(vector<int>& arr) {
     if (arr.size() <= 1) {
         return;
     }
 
-    std::vector<int> scratch(arr.size());
+    vector<int> scratch(arr.size());
     serial_merge_sort_recursive(arr, scratch, 0, arr.size());
 }
 
-bool verify_sorted(const std::vector<int>& reference,
-                   const std::vector<int>& result) {
+bool verify_sorted(const vector<int>& reference,
+                   const vector<int>& result) {
     if (reference.size() != result.size()) {
-        std::cerr << "[VERIFY] Size mismatch: reference=" << reference.size()
+        cerr << "[VERIFY] Size mismatch: reference=" << reference.size()
                   << "  result=" << result.size() << "\n";
         return false;
     }
 
-    for (std::size_t i = 0; i < reference.size(); ++i) {
+    for (size_t i = 0; i < reference.size(); ++i) {
         if (reference[i] != result[i]) {
-            std::cerr << "[VERIFY] First mismatch at index " << i
+            cerr << "[VERIFY] First mismatch at index " << i
                       << ": expected " << reference[i]
                       << ", got "      << result[i]    << "\n";
             return false;

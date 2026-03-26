@@ -11,6 +11,7 @@
  */
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -67,6 +68,7 @@ static void write_csv_row(const Config& cfg, double avg_ms) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 int main(int argc, char* argv[]) {
+    constexpr long long kMaxSafeElements = 536870912LL;
 
     // ── 1. Parse CLI ──────────────────────────────────────────────────────────
     Config cfg;
@@ -77,26 +79,39 @@ int main(int argc, char* argv[]) {
         print_usage(argv[0]);
         return 1;
     }
+
+    if (cfg.size > kMaxSafeElements) {
+        cerr << "[ERROR] Requested size is too large and exceeds safe memory limits "
+             << "(Max ~5.3e8).\n";
+        return EXIT_FAILURE;
+    }
+
     print_config(cfg);
 
     // ── 2. Generate input data ────────────────────────────────────────────────
-    cout << "[INFO]  Generating " << cfg.size << " elements ("
-         << dist_to_string(cfg.dist) << ", seed=" << cfg.seed << ") ...\n";
+    vector<int> original;
+    vector<int> reference;
+    try {
+        cout << "[INFO]  Generating " << cfg.size << " elements ("
+             << dist_to_string(cfg.dist) << ", seed=" << cfg.seed << ") ...\n";
+        original = generate_array(cfg.size, cfg.dist, cfg.seed);
 
-    const vector<int> original =
-        generate_array(cfg.size, cfg.dist, cfg.seed);
-
-    // ── 3. Serial reference (run once; not counted in benchmark timing) ───────
-    cout << "[INFO]  Computing serial reference ...\n";
-    vector<int> reference = original;
-    serial_sort(reference);
+        // ── 3. Serial reference (run once; not counted in benchmark timing) ───
+        cout << "[INFO]  Computing serial reference ...\n";
+        reference = original;
+        serial_sort(reference);
+    } catch (const bad_alloc&) {
+        cerr << "[ERROR] Memory allocation failed. The requested size is larger "
+             << "than your available RAM.\n";
+        return EXIT_FAILURE;
+    }
 
     // ── 4. Benchmark loop ─────────────────────────────────────────────────────
-        cout << "[INFO]  Running '" << impl_to_string(cfg.impl) << "' for "
-            << cfg.repeats << " repeat(s) ...\n";
+    cout << "[INFO]  Running '" << impl_to_string(cfg.impl) << "' for "
+         << cfg.repeats << " repeat(s) ...\n";
 
     double total_ms = 0.0;
-        vector<int> arr;   // re-used each repeat
+    vector<int> arr;   // re-used each repeat
 
     for (int rep = 0; rep < cfg.repeats; ++rep) {
         arr = original;     // fresh copy — measures sort time only
@@ -121,14 +136,14 @@ int main(int argc, char* argv[]) {
         const double ms = elapsed_ms(t0, t1);
         total_ms += ms;
 
-           cout << "  [rep " << setw(3) << (rep + 1)
-               << "/" << cfg.repeats << "]  "
-               << fixed << setprecision(3) << ms << " ms\n";
+        cout << "  [rep " << setw(3) << (rep + 1)
+             << "/" << cfg.repeats << "]  "
+             << fixed << setprecision(3) << ms << " ms\n";
     }
 
     const double avg_ms = total_ms / cfg.repeats;
-        cout << "[RESULT] average = " << fixed << setprecision(3)
-            << avg_ms << " ms  (total=" << total_ms << " ms)\n";
+    cout << "[RESULT] average = " << fixed << setprecision(3)
+         << avg_ms << " ms  (total=" << total_ms << " ms)\n";
 
     // ── 5. Correctness verification ───────────────────────────────────────────
     if (!verify_sorted(reference, arr)) {

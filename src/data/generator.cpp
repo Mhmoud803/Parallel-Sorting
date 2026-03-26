@@ -18,7 +18,7 @@ static vector<int> gen_uniform(long long size, mt19937& rng) {
     constexpr int hi = numeric_limits<int>::max() / 2;
     uniform_int_distribution<int> dist(lo, hi);
 
-    vector<int> arr(static_cast<size_t>(size));
+    vector<int> arr(static_cast<unsigned long long>(size));
     for (auto& x : arr) x = dist(rng);
     return arr;
 }
@@ -30,7 +30,7 @@ static vector<int> gen_gaussian(long long size, mt19937& rng) {
     const double lo = static_cast<double>(numeric_limits<int>::min());
     const double hi = static_cast<double>(numeric_limits<int>::max());
 
-    vector<int> arr(static_cast<size_t>(size));
+    vector<int> arr(static_cast<unsigned long long>(size));
     for (auto& x : arr) {
         const double v = clamp(dist(rng), lo, hi);
         x = static_cast<int>(v);
@@ -41,14 +41,14 @@ static vector<int> gen_gaussian(long long size, mt19937& rng) {
 // Nearly sorted: consecutive integers with ~1% random pairwise swaps.
 // Tests algorithms that exploit existing order (adaptive sorts).
 static vector<int> gen_nearly_sorted(long long size, mt19937& rng) {
-    vector<int> arr(static_cast<size_t>(size));
+    vector<int> arr(static_cast<unsigned long long>(size));
     iota(arr.begin(), arr.end(), 0);  // 0, 1, 2, ..., size-1
 
     const long long num_swaps = max(1LL, size / 100);
     uniform_int_distribution<long long> idx(0, size - 1);
     for (long long s = 0; s < num_swaps; ++s) {
-        swap(arr[static_cast<size_t>(idx(rng))],
-             arr[static_cast<size_t>(idx(rng))]);
+           swap(arr[static_cast<unsigned long long>(idx(rng))],
+               arr[static_cast<unsigned long long>(idx(rng))]);
     }
     return arr;
 }
@@ -56,7 +56,7 @@ static vector<int> gen_nearly_sorted(long long size, mt19937& rng) {
 // Reversed: size-1, size-2, ..., 1, 0.
 // Worst case for naive algorithms that assume partial order.
 static vector<int> gen_reversed(long long size) {
-    vector<int> arr(static_cast<size_t>(size));
+    vector<int> arr(static_cast<unsigned long long>(size));
     iota(arr.begin(), arr.end(), 0);
     reverse(arr.begin(), arr.end());
     return arr;

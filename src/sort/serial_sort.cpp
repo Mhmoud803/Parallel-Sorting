@@ -7,39 +7,39 @@ namespace {
 
 void serial_merge_sort_recursive(vector<int>& arr,
                                  vector<int>& scratch,
-                                 size_t left,
-                                 size_t right) {
+                                 long long left,
+                                 long long right) {
     // Sort range [left, right) using divide-and-conquer.
     if (right - left <= 1) {
         return;
     }
 
-    const size_t mid = left + (right - left) / 2;
+    const long long mid = left + (right - left) / 2;
     serial_merge_sort_recursive(arr, scratch, left, mid);
     serial_merge_sort_recursive(arr, scratch, mid, right);
 
-    size_t i = left;
-    size_t j = mid;
-    size_t k = left;
+    long long i = left;
+    long long j = mid;
+    long long k = left;
 
     while (i < mid && j < right) {
-        if (arr[i] <= arr[j]) {
-            scratch[k++] = arr[i++];
+        if (arr[static_cast<ptrdiff_t>(i)] <= arr[static_cast<ptrdiff_t>(j)]) {
+            scratch[static_cast<ptrdiff_t>(k++)] = arr[static_cast<ptrdiff_t>(i++)];
         } else {
-            scratch[k++] = arr[j++];
+            scratch[static_cast<ptrdiff_t>(k++)] = arr[static_cast<ptrdiff_t>(j++)];
         }
     }
 
     while (i < mid) {
-        scratch[k++] = arr[i++];
+        scratch[static_cast<ptrdiff_t>(k++)] = arr[static_cast<ptrdiff_t>(i++)];
     }
 
     while (j < right) {
-        scratch[k++] = arr[j++];
+        scratch[static_cast<ptrdiff_t>(k++)] = arr[static_cast<ptrdiff_t>(j++)];
     }
 
-    for (size_t idx = left; idx < right; ++idx) {
-        arr[idx] = scratch[idx];
+    for (long long idx = left; idx < right; ++idx) {
+        arr[static_cast<ptrdiff_t>(idx)] = scratch[static_cast<ptrdiff_t>(idx)];
     }
 }
 
@@ -62,11 +62,11 @@ bool verify_sorted(const vector<int>& reference,
         return false;
     }
 
-    for (size_t i = 0; i < reference.size(); ++i) {
-        if (reference[i] != result[i]) {
+    for (long long i = 0; i < static_cast<long long>(reference.size()); ++i) {
+        if (reference[static_cast<ptrdiff_t>(i)] != result[static_cast<ptrdiff_t>(i)]) {
             cerr << "[VERIFY] First mismatch at index " << i
-                      << ": expected " << reference[i]
-                      << ", got "      << result[i]    << "\n";
+                 << ": expected " << reference[static_cast<ptrdiff_t>(i)]
+                 << ", got "      << result[static_cast<ptrdiff_t>(i)]    << "\n";
             return false;
         }
     }

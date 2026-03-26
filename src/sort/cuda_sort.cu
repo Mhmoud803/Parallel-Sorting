@@ -36,32 +36,34 @@ inline void throw_cuda_error(cudaError_t err, const char* expr, const char* file
 
 #define CUDA_CHECK(expr) throw_cuda_error((expr), #expr, __FILE__, __LINE__)
 
-size_t next_power_of_two(size_t n) {
+long long next_power_of_two(long long n) {
     if (n <= 1) {
         return 1;
     }
 
     --n;
-    for (size_t shift = 1; shift < (sizeof(size_t) * 8); shift <<= 1) {
+    for (long long shift = 1;
+         shift < static_cast<long long>(sizeof(long long) * 8);
+         shift <<= 1) {
         n |= (n >> shift);
     }
     return n + 1;
 }
 
-__device__ inline size_t pair_left_index(size_t pair_idx, size_t stride) {
+__device__ inline long long pair_left_index(long long pair_idx, long long stride) {
     return ((pair_idx / stride) * (stride << 1)) + (pair_idx % stride);
 }
 
-__global__ void shared_bitonic_tile_kernel(int* data, size_t n) {
+__global__ void shared_bitonic_tile_kernel(int* data, long long n) {
     extern __shared__ int tile[];
 
-    const size_t threads_per_block = static_cast<size_t>(blockDim.x);
-    const size_t tile_size = threads_per_block << 1;
-    const size_t base = static_cast<size_t>(blockIdx.x) * tile_size;
-    const size_t tid = static_cast<size_t>(threadIdx.x);
+    const long long threads_per_block = static_cast<long long>(blockDim.x);
+    const long long tile_size = threads_per_block << 1;
+    const long long base = static_cast<long long>(blockIdx.x) * tile_size;
+    const long long tid = static_cast<long long>(threadIdx.x);
 
-    const size_t idx0 = base + tid;
-    const size_t idx1 = idx0 + threads_per_block;
+    const long long idx0 = base + tid;
+    const long long idx1 = idx0 + threads_per_block;
 
     tile[tid] =
         (idx0 < n) ? data[idx0] : INT_MAX;
@@ -74,10 +76,10 @@ __global__ void shared_bitonic_tile_kernel(int* data, size_t n) {
     // same index rules as the global algorithm. The tile direction therefore
     // alternates by block, which makes it a valid starting point for the later
     // cross-block merge stages in global memory.
-    for (size_t k = 2; k <= tile_size; k <<= 1) {
-        for (size_t j = k >> 1; j > 0; j >>= 1) {
-            const size_t left = pair_left_index(tid, j);
-            const size_t right = left + j;
+    for (long long k = 2; k <= tile_size; k <<= 1) {
+        for (long long j = k >> 1; j > 0; j >>= 1) {
+            const long long left = pair_left_index(tid, j);
+            const long long right = left + j;
             const bool ascending = (((base + left) & k) == 0);
 
             const int lhs = tile[left];
@@ -99,16 +101,16 @@ __global__ void shared_bitonic_tile_kernel(int* data, size_t n) {
     }
 }
 
-__global__ void bitonic_step_kernel(int* data, size_t j, size_t k, size_t n) {
-    const size_t idx =
-        static_cast<size_t>(blockIdx.x) * static_cast<size_t>(blockDim.x) +
-        static_cast<size_t>(threadIdx.x);
+__global__ void bitonic_step_kernel(int* data, long long j, long long k, long long n) {
+    const long long idx =
+        static_cast<long long>(blockIdx.x) * static_cast<long long>(blockDim.x) +
+        static_cast<long long>(threadIdx.x);
 
     if (idx >= n) {
         return;
     }
 
-    const size_t partner = idx ^ j;
+    const long long partner = idx ^ j;
     if (partner <= idx || partner >= n) {
         return;
     }
@@ -148,8 +150,8 @@ void cuda_bitonic_sort(vector<int>& arr, int block_size) {
         throw runtime_error("cuda_bitonic_sort: no CUDA-capable device available");
     }
 
-    const size_t original_size = arr.size();
-    const size_t padded_size = next_power_of_two(original_size);
+    const long long original_size = static_cast<long long>(arr.size());
+    const long long padded_size = next_power_of_two(original_size);
 
     vector<int> host_buffer(padded_size, INT_MAX);
     copy(arr.begin(), arr.end(), host_buffer.begin());
@@ -189,9 +191,9 @@ void cuda_bitonic_sort(vector<int>& arr, int block_size) {
 
         const dim3 threads(static_cast<unsigned int>(block_size));
         const dim3 blocks(static_cast<unsigned int>((padded_size + block_size - 1) / block_size));
-        const size_t local_span = static_cast<size_t>(block_size) << 1;
+        const long long local_span = static_cast<long long>(block_size) << 1;
         const dim3 tile_blocks(static_cast<unsigned int>((padded_size + local_span - 1) / local_span));
-        const size_t shared_bytes = local_span * sizeof(int);
+        const long long shared_bytes = local_span * sizeof(int);
 
         CUDA_CHECK(cudaEventRecord(compute_start));
 
@@ -202,8 +204,8 @@ void cuda_bitonic_sort(vector<int>& arr, int block_size) {
         shared_bitonic_tile_kernel<<<tile_blocks, threads, shared_bytes>>>(d_arr, padded_size);
         CUDA_CHECK(cudaPeekAtLastError());
 
-        for (size_t k = local_span << 1; k <= padded_size; k <<= 1) {
-            for (size_t j = k >> 1; j > 0; j >>= 1) {
+        for (long long k = local_span << 1; k <= padded_size; k <<= 1) {
+            for (long long j = k >> 1; j > 0; j >>= 1) {
                 bitonic_step_kernel<<<blocks, threads>>>(d_arr, j, k, padded_size);
                 CUDA_CHECK(cudaPeekAtLastError());
             }

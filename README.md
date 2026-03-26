@@ -1,4 +1,4 @@
-# Project 2 — OpenMP MergeSort vs CUDA Bitonic Sort
+# OpenMP MergeSort vs CUDA Bitonic Sort
 
 A High-Performance Computing (HPC) benchmarking project comparing a CPU-parallel **OpenMP MergeSort** against a GPU-accelerated **CUDA Bitonic Sort**. The parallel implementations are evaluated against a highly optimized, custom **Serial MergeSort** baseline for correctness verification and precise speedup calculations.
 
@@ -56,25 +56,24 @@ project2-sort/
 *(Developed and tested on Ubuntu 24.04 LTS, AMD Ryzen 7 5800H, and NVIDIA RTX 3050).*
 
 ---
-
 ## ⚙️ Build & Run
 
 ### Quick Start (Automated Benchmark)
 
-For a fully automated pipeline that builds the project, runs the entire experiment matrix (with 5 repeats per condition), and generates performance plots:
+For a fully automated pipeline that builds the project, runs the entire experiment matrix, and generates performance plots:
 
 ```bash
 bash run_experiments.sh
 ```
 
 **What this script does automatically:**
-1. Configures and builds `sort_bench` (defaults to CUDA Architecture `86` for RTX 30-series).
+1. Configures and builds `sort_bench`. (CMake auto-detects your GPU architecture).
 2. Executes the Serial, OpenMP, and CUDA benchmarks across varying sizes and distributions.
 3. Consolidates outputs into `results/results.csv`.
-4. Creates a Python virtual environment (`.venv`), installs `matplotlib`/`pandas`/`seaborn`.
+4. Creates a Python virtual environment (`.venv`), installs plotting dependencies.
 5. Generates the final Speedup and Execution Time plots in `results/plots/`.
 
-*(Note: To override the default CUDA architecture, run: `CUDA_ARCHITECTURES=75 bash run_experiments.sh`)*
+*(Note: If CMake fails to auto-detect your GPU architecture, you can override it manually. For example, for an RTX 30-series card: `CUDA_ARCHITECTURES=86 bash run_experiments.sh`)*
 
 ---
 
@@ -83,8 +82,8 @@ bash run_experiments.sh
 If you wish to build manually and run specific benchmark configurations:
 
 ```bash
-# 1. Configure and Build
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=86
+# 1. Configure and Build (CMake will auto-detect the host GPU architecture)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 
 # 2. Run a specific test (e.g., CUDA Bitonic Sort, 67.1M elements, Reversed data)
@@ -96,7 +95,6 @@ cmake --build build -j$(nproc)
     --repeats 5 \
     --output results/cuda.csv
 ```
-
 ### CLI Flag Reference
 
 | Flag | Values | Default | Description |

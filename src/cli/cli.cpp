@@ -10,11 +10,11 @@
 
 // Advance the index and return the next argument string.
 // Throws if there is no next argument.
-static std::string require_value(int& i, int argc, char* argv[]) {
-    const std::string flag = argv[i];
+static string require_value(int& i, int argc, char* argv[]) {
+    const string flag = argv[i];
     ++i;
     if (i >= argc) {
-        throw std::invalid_argument("Flag '" + flag + "' requires a value");
+        throw invalid_argument("Flag '" + flag + "' requires a value");
     }
     return argv[i];
 }
@@ -26,77 +26,77 @@ Config parse_args(int argc, char* argv[]) {
     bool has_size = false;
 
     for (int i = 1; i < argc; ++i) {
-        const std::string key = argv[i];
+        const string key = argv[i];
 
         if (key == "--help" || key == "-h") {
             print_usage(argv[0]);
-            std::exit(0);
+            exit(0);
 
         } else if (key == "--size") {
-            const long long v = std::stoll(require_value(i, argc, argv));
-            if (v <= 0) throw std::invalid_argument("--size must be > 0");
+            const long long v = stoll(require_value(i, argc, argv));
+            if (v <= 0) throw invalid_argument("--size must be > 0");
             cfg.size = v;
             has_size = true;
 
         } else if (key == "--distribution") {
-            const std::string v = require_value(i, argc, argv);
+            const string v = require_value(i, argc, argv);
             if      (v == "uniform")       cfg.dist = Distribution::Uniform;
             else if (v == "gaussian")      cfg.dist = Distribution::Gaussian;
             else if (v == "nearly_sorted") cfg.dist = Distribution::NearlySorted;
             else if (v == "reversed")      cfg.dist = Distribution::Reversed;
-            else throw std::invalid_argument(
+            else throw invalid_argument(
                 "Unknown distribution '" + v +
                 "'. Valid: uniform, gaussian, nearly_sorted, reversed");
 
         } else if (key == "--seed") {
             cfg.seed = static_cast<unsigned int>(
-                std::stoul(require_value(i, argc, argv)));
+                stoul(require_value(i, argc, argv)));
 
         } else if (key == "--impl") {
-            const std::string v = require_value(i, argc, argv);
+            const string v = require_value(i, argc, argv);
             if      (v == "serial") cfg.impl = Implementation::Serial;
             else if (v == "omp")    cfg.impl = Implementation::OMP;
             else if (v == "cuda")   cfg.impl = Implementation::CUDA;
-            else throw std::invalid_argument(
+            else throw invalid_argument(
                 "Unknown impl '" + v + "'. Valid: serial, omp, cuda");
 
         } else if (key == "--threads") {
-            const int v = std::stoi(require_value(i, argc, argv));
-            if (v <= 0) throw std::invalid_argument("--threads must be > 0");
+            const int v = stoi(require_value(i, argc, argv));
+            if (v <= 0) throw invalid_argument("--threads must be > 0");
             cfg.threads = v;
 
         } else if (key == "--cutoff") {
-            const int v = std::stoi(require_value(i, argc, argv));
-            if (v <= 0) throw std::invalid_argument("--cutoff must be > 0");
+            const int v = stoi(require_value(i, argc, argv));
+            if (v <= 0) throw invalid_argument("--cutoff must be > 0");
             cfg.cutoff = v;
 
         } else if (key == "--block-size") {
-            const int v = std::stoi(require_value(i, argc, argv));
-            if (v <= 0) throw std::invalid_argument("--block-size must be > 0");
+            const int v = stoi(require_value(i, argc, argv));
+            if (v <= 0) throw invalid_argument("--block-size must be > 0");
             cfg.block_size = v;
 
         } else if (key == "--repeats") {
-            const int v = std::stoi(require_value(i, argc, argv));
-            if (v <= 0) throw std::invalid_argument("--repeats must be > 0");
+            const int v = stoi(require_value(i, argc, argv));
+            if (v <= 0) throw invalid_argument("--repeats must be > 0");
             cfg.repeats = v;
 
         } else if (key == "--output") {
             cfg.output = require_value(i, argc, argv);
 
         } else {
-            throw std::invalid_argument("Unknown flag '" + key + "'");
+            throw invalid_argument("Unknown flag '" + key + "'");
         }
     }
 
     if (!has_size) {
-        throw std::invalid_argument("--size is required");
+        throw invalid_argument("--size is required");
     }
 
     return cfg;
 }
 
 void print_usage(const char* prog) {
-    std::cout <<
+    cout <<
         "Usage: " << prog << " [OPTIONS]\n"
         "\n"
         "Required:\n"
@@ -123,21 +123,21 @@ void print_usage(const char* prog) {
 }
 
 void print_config(const Config& cfg) {
-    std::cout
+    cout
         << "┌─ Configuration ─────────────────────────────┐\n"
-        << "│  size         : " << std::setw(24) << cfg.size         << " │\n"
-        << "│  distribution : " << std::setw(24) << dist_to_string(cfg.dist) << " │\n"
-        << "│  seed         : " << std::setw(24) << cfg.seed         << " │\n"
-        << "│  impl         : " << std::setw(24) << impl_to_string(cfg.impl) << " │\n"
-        << "│  threads      : " << std::setw(24) << cfg.threads      << " │\n"
-        << "│  cutoff       : " << std::setw(24) << cfg.cutoff       << " │\n"
-        << "│  block_size   : " << std::setw(24) << cfg.block_size   << " │\n"
-        << "│  repeats      : " << std::setw(24) << cfg.repeats      << " │\n"
-        << "│  output       : " << std::setw(24) << (cfg.output.empty() ? "(none)" : cfg.output) << " │\n"
+        << "│  size         : " << setw(24) << cfg.size         << " │\n"
+        << "│  distribution : " << setw(24) << dist_to_string(cfg.dist) << " │\n"
+        << "│  seed         : " << setw(24) << cfg.seed         << " │\n"
+        << "│  impl         : " << setw(24) << impl_to_string(cfg.impl) << " │\n"
+        << "│  threads      : " << setw(24) << cfg.threads      << " │\n"
+        << "│  cutoff       : " << setw(24) << cfg.cutoff       << " │\n"
+        << "│  block_size   : " << setw(24) << cfg.block_size   << " │\n"
+        << "│  repeats      : " << setw(24) << cfg.repeats      << " │\n"
+        << "│  output       : " << setw(24) << (cfg.output.empty() ? "(none)" : cfg.output) << " │\n"
         << "└─────────────────────────────────────────────┘\n";
 }
 
-std::string dist_to_string(Distribution d) {
+    string dist_to_string(Distribution d) {
     switch (d) {
         case Distribution::Uniform:      return "uniform";
         case Distribution::Gaussian:     return "gaussian";
@@ -147,7 +147,7 @@ std::string dist_to_string(Distribution d) {
     return "unknown";
 }
 
-std::string impl_to_string(Implementation i) {
+string impl_to_string(Implementation i) {
     switch (i) {
         case Implementation::Serial: return "serial";
         case Implementation::OMP:    return "omp";

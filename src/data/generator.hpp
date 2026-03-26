@@ -2,6 +2,7 @@
 
 #include <vector>
 #include "cli/cli.hpp"  // Distribution enum
+using namespace std;
 
 /**
  * Generate a synthetic array of `size` integers.
@@ -11,4 +12,4 @@
  * @param seed  RNG seed for full reproducibility.
  * @return      Freshly allocated vector of length `size`.
  */
-std::vector<int> generate_array(long long size, Distribution dist, unsigned int seed);
+vector<int> generate_array(long long size, Distribution dist, unsigned int seed);

@@ -6,42 +6,57 @@
 #include <vector>
 
 #include <omp.h>
+using namespace std;
 
 namespace {
 
-void merge_ranges(std::vector<int>& arr,
-                  std::vector<int>& scratch,
-                  std::size_t lo,
-                  std::size_t mid,
-                  std::size_t hi) {
-    std::merge(arr.begin() + static_cast<std::ptrdiff_t>(lo),
-               arr.begin() + static_cast<std::ptrdiff_t>(mid),
-               arr.begin() + static_cast<std::ptrdiff_t>(mid),
-               arr.begin() + static_cast<std::ptrdiff_t>(hi),
-               scratch.begin() + static_cast<std::ptrdiff_t>(lo));
+void merge_ranges(vector<int>& arr,
+                  vector<int>& scratch,
+                  size_t lo,
+                  size_t mid,
+                  size_t hi) {
+    size_t i = lo;
+    size_t j = mid;
+    size_t k = lo;
 
-    std::copy(scratch.begin() + static_cast<std::ptrdiff_t>(lo),
-              scratch.begin() + static_cast<std::ptrdiff_t>(hi),
-              arr.begin() + static_cast<std::ptrdiff_t>(lo));
+    while (i < mid && j < hi) {
+        if (arr[i] <= arr[j]) {
+            scratch[k++] = arr[i++];
+        } else {
+            scratch[k++] = arr[j++];
+        }
+    }
+
+    while (i < mid) {
+        scratch[k++] = arr[i++];
+    }
+
+    while (j < hi) {
+        scratch[k++] = arr[j++];
+    }
+
+    for (size_t idx = lo; idx < hi; ++idx) {
+        arr[idx] = scratch[idx];
+    }
 }
 
-void merge_sort_task(std::vector<int>& arr,
-                     std::vector<int>& scratch,
-                     std::size_t lo,
-                     std::size_t hi,
-                     std::size_t serial_cutoff) {
-    const std::size_t len = hi - lo;
+void merge_sort_task(vector<int>& arr,
+                     vector<int>& scratch,
+                     size_t lo,
+                     size_t hi,
+                     size_t serial_cutoff) {
+    const size_t len = hi - lo;
     if (len <= 1) {
         return;
     }
 
     if (len <= serial_cutoff) {
-        std::sort(arr.begin() + static_cast<std::ptrdiff_t>(lo),
-                  arr.begin() + static_cast<std::ptrdiff_t>(hi));
+        sort(arr.begin() + static_cast<ptrdiff_t>(lo),
+             arr.begin() + static_cast<ptrdiff_t>(hi));
         return;
     }
 
-    const std::size_t mid = lo + (len / 2);
+    const size_t mid = lo + (len / 2);
     const bool spawn_tasks = len >= (serial_cutoff << 1);
 
     #pragma omp task shared(arr, scratch) if(spawn_tasks)
@@ -56,21 +71,21 @@ void merge_sort_task(std::vector<int>& arr,
 
 }  // namespace
 
-void omp_merge_sort(std::vector<int>& arr, int num_threads, int cutoff) {
+void omp_merge_sort(vector<int>& arr, int num_threads, int cutoff) {
     if (num_threads <= 0) {
-        throw std::invalid_argument("omp_merge_sort: num_threads must be > 0");
+        throw invalid_argument("omp_merge_sort: num_threads must be > 0");
     }
 
     if (cutoff <= 0) {
-        throw std::invalid_argument("omp_merge_sort: cutoff must be > 0");
+        throw invalid_argument("omp_merge_sort: cutoff must be > 0");
     }
 
     if (arr.size() <= 1) {
         return;
     }
 
-    std::vector<int> scratch(arr.size());
-    const std::size_t serial_cutoff = static_cast<std::size_t>(cutoff);
+    vector<int> scratch(arr.size());
+    const size_t serial_cutoff = static_cast<size_t>(cutoff);
 
     omp_set_num_threads(num_threads);
 

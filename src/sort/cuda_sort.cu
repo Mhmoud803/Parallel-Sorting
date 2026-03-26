@@ -13,6 +13,8 @@
 #include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <iomanip>
+#include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -153,19 +155,45 @@ void cuda_bitonic_sort(vector<int>& arr, int block_size) {
     copy(arr.begin(), arr.end(), host_buffer.begin());
 
     int* d_arr = nullptr;
+    cudaEvent_t h2d_start = nullptr;
+    cudaEvent_t h2d_stop = nullptr;
+    cudaEvent_t compute_start = nullptr;
+    cudaEvent_t compute_stop = nullptr;
+    cudaEvent_t d2h_start = nullptr;
+    cudaEvent_t d2h_stop = nullptr;
+
+    auto destroy_event = [](cudaEvent_t& ev) {
+        if (ev != nullptr) {
+            cudaEventDestroy(ev);
+            ev = nullptr;
+        }
+    };
 
     try {
+        CUDA_CHECK(cudaEventCreate(&h2d_start));
+        CUDA_CHECK(cudaEventCreate(&h2d_stop));
+        CUDA_CHECK(cudaEventCreate(&compute_start));
+        CUDA_CHECK(cudaEventCreate(&compute_stop));
+        CUDA_CHECK(cudaEventCreate(&d2h_start));
+        CUDA_CHECK(cudaEventCreate(&d2h_stop));
+
         CUDA_CHECK(cudaMalloc(&d_arr, padded_size * sizeof(int)));
+
+        CUDA_CHECK(cudaEventRecord(h2d_start));
         CUDA_CHECK(cudaMemcpy(d_arr,
                               host_buffer.data(),
                               padded_size * sizeof(int),
                               cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaEventRecord(h2d_stop));
+        CUDA_CHECK(cudaEventSynchronize(h2d_stop));
 
         const dim3 threads(static_cast<unsigned int>(block_size));
         const dim3 blocks(static_cast<unsigned int>((padded_size + block_size - 1) / block_size));
         const size_t local_span = static_cast<size_t>(block_size) << 1;
         const dim3 tile_blocks(static_cast<unsigned int>((padded_size + local_span - 1) / local_span));
         const size_t shared_bytes = local_span * sizeof(int);
+
+        CUDA_CHECK(cudaEventRecord(compute_start));
 
         // Early stages are executed inside shared memory for each tile of
         // 2 * block_size elements. Once the bitonic sequence length exceeds the
@@ -181,20 +209,59 @@ void cuda_bitonic_sort(vector<int>& arr, int block_size) {
             }
         }
 
+        CUDA_CHECK(cudaEventRecord(compute_stop));
+        CUDA_CHECK(cudaEventSynchronize(compute_stop));
+
+        CUDA_CHECK(cudaEventRecord(d2h_start));
         CUDA_CHECK(cudaDeviceSynchronize());
         CUDA_CHECK(cudaMemcpy(host_buffer.data(),
                               d_arr,
                               padded_size * sizeof(int),
                               cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaEventRecord(d2h_stop));
+        CUDA_CHECK(cudaEventSynchronize(d2h_stop));
+
+        float h2d_ms = 0.0f;
+        float compute_ms = 0.0f;
+        float d2h_ms = 0.0f;
+        CUDA_CHECK(cudaEventElapsedTime(&h2d_ms, h2d_start, h2d_stop));
+        CUDA_CHECK(cudaEventElapsedTime(&compute_ms, compute_start, compute_stop));
+        CUDA_CHECK(cudaEventElapsedTime(&d2h_ms, d2h_start, d2h_stop));
+
+        const double transfer_ms = static_cast<double>(h2d_ms) + static_cast<double>(d2h_ms);
+        const double compute_ms_d = static_cast<double>(compute_ms);
+        const double measured_total_ms = compute_ms_d + transfer_ms;
+        const double compute_percentage = (measured_total_ms > 0.0)
+            ? (compute_ms_d / measured_total_ms) * 100.0
+            : 0.0;
+
+        cout << fixed << setprecision(1)
+             << "[CUDA Metrics] Compute Percentage: " << compute_percentage << "%"
+             << " (Compute=" << compute_ms_d << " ms, Transfer=" << transfer_ms << " ms)\n";
+
+        destroy_event(h2d_start);
+        destroy_event(h2d_stop);
+        destroy_event(compute_start);
+        destroy_event(compute_stop);
+        destroy_event(d2h_start);
+        destroy_event(d2h_stop);
     } catch (...) {
         if (d_arr != nullptr) {
             cudaFree(d_arr);
         }
+
+        destroy_event(h2d_start);
+        destroy_event(h2d_stop);
+        destroy_event(compute_start);
+        destroy_event(compute_stop);
+        destroy_event(d2h_start);
+        destroy_event(d2h_stop);
+
         throw;
     }
 
     CUDA_CHECK(cudaFree(d_arr));
-        copy(host_buffer.begin(),
-            host_buffer.begin() + static_cast<ptrdiff_t>(original_size),
-              arr.begin());
+    copy(host_buffer.begin(),
+         host_buffer.begin() + static_cast<ptrdiff_t>(original_size),
+         arr.begin());
 }

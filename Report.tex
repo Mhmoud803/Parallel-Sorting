@@ -8,6 +8,12 @@
 \usepackage{xcolor}
 \usepackage{booktabs}
 \usepackage{hyperref}
+% \documentclass{article}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{colortbl}
+
 
 % Configure hyperlink colors to look professional
 \hypersetup{
@@ -50,7 +56,7 @@ To ensure reproducibility, all experiments were executed on a dedicated benchmar
 \end{itemize}
 
 \subsection{Measurement Strategy}
-Execution times were recorded strictly for the end-to-end sorting phase. For CUDA implementations, this total execution time explicitly includes Host-to-Device and Device-to-Host memory transfers to simulate a realistic offloading penalty. Furthermore, internal CUDA event timers were implemented to profile the exact ratio of kernel execution time versus memory transfer time, allowing us to report the pure compute percentage in the application's output logs. Each experimental condition was executed 5 times, and the average execution time is reported to mitigate OS jitter. All benchmark points were measured with \texttt{repeats = 5}, matching the experiment driver configuration.
+Execution times were recorded strictly for the end-to-end sorting phase. For CUDA implementations, this total execution time explicitly includes Host-to-Device and Device-to-Host memory transfers to simulate a realistic offloading penalty. Furthermore, internal CUDA event timers were implemented to profile the exact ratio of kernel execution time versus memory transfer time, allowing us to report the pure compute percentage in the application's output logs. Each experimental condition was executed 5 times, and the average execution time is reported to mitigate OS jitter. All benchmark points were measured with \texttt{repeats = 5}, matching the experiment driver configuration and in first time at cuda that longest for initialization.
 
 \section{Algorithm Design and Implementation Details}
 
@@ -62,7 +68,7 @@ A critical optimization in this serial baseline is its memory management strateg
 \subsection{OpenMP MergeSort}
 The OpenMP implementation follows the classical divide-and-conquer structure of MergeSort. The recursive routine \texttt{merge\_sort\_task()} splits the range $[lo, hi)$ into two halves, recursively sorts each half, and then combines them using the same manual index-based merge logic. To avoid repeated temporary allocations during recursion, the implementation allocates a single auxiliary vector \texttt{scratch} once in \texttt{omp\_merge\_sort()} and passes it through all recursive calls. The actual merge is performed in two phases: the ordered halves are first merged into the corresponding segment of \texttt{scratch} via explicit pointer/index arithmetic, and then copied back into the original array. This preserves the expected MergeSort work complexity of $O(N \log N)$ while keeping the implementation straightforward and free of memory contention among threads.
 
-Parallelism is introduced with OpenMP tasking. Inside a single OpenMP parallel region, the root thread enters the recursion through \texttt{\#pragma omp single nowait}, and each sufficiently large subproblem may create two child tasks using \texttt{\#pragma omp task}. A \texttt{\#pragma omp taskwait} then enforces the required synchronization before merging, ensuring that both halves are completely sorted before the combine step begins. This task-based design is well matched to recursive MergeSort because different branches of the recursion tree can execute independently and be scheduled dynamically across threads.
+Parallelism is introduced with OpenMP tasking. Inside a single OpenMP parallel region,in first we use  one thread to open recursion then geos with other threads upon to conidions of cuttoff the root thread enters the recursion through \texttt{\#pragma omp single nowait}, and each sufficiently large subproblem may create two child tasks using \texttt{\#pragma omp task}. A \texttt{\#pragma omp taskwait} then enforces the required synchronization before merging, ensuring that both halves are completely sorted before the combine step begins. This task-based design is well matched to recursive MergeSort because different branches of the recursion tree can execute independently and be scheduled dynamically across threads.
 
 A crucial design choice in this implementation is the adaptive serial cutoff, controlled by the parameter \texttt{cutoff}. When the subarray length satisfies $\texttt{len} \le \texttt{serial\_cutoff}$, the code does \emph{not} continue recursing in parallel; instead, it falls back to \texttt{std::sort} on that subrange. By switching to \texttt{std::sort} for small ranges, the implementation leverages a highly optimized serial kernel exactly where fine-grained parallelism would be least effective.
 
@@ -71,7 +77,7 @@ The code further reinforces this idea by only enabling actual task creation when
 \subsection{CUDA Bitonic Sort}
 The GPU implementation uses Bitonic Sort, a sorting-network algorithm particularly well suited to SIMD/SIMT architectures such as CUDA GPUs. Unlike comparison sorts whose control flow depends on the data, a bitonic sorting network has a fixed sequence of compare-exchange operations determined entirely by index arithmetic. In the implementation, this is visible in the nested progression over the network stages \texttt{k} and \texttt{j}, and in the partner computation \texttt{partner = idx \^{} j}. The direction of comparison is likewise computed from the index pattern rather than from the input values. This data-independent structure is attractive on GPUs because it yields regular memory access and predictable control flow, although its asymptotic complexity is $O(N \log^2 N)$, which is theoretically less efficient than $O(N \log N)$ methods such as MergeSort.
 
-A first important design choice is the padding strategy for arbitrary input sizes. Bitonic Sort requires the logical problem size to be a power of two, so the host code computes the next power of two using \texttt{next\_power\_of\_two()}. It then allocates a host-side buffer of that padded length and initializes the extra entries to \texttt{INT\_MAX}. The original data are copied into the prefix of this buffer, transferred to the device, sorted, and finally only the first \texttt{original\_size} elements are copied back into the user-visible array. Padding with \texttt{INT\_MAX} is a particularly clean choice for ascending order because these sentinel values naturally migrate to the end of the sorted sequence and therefore do not disturb the ordering of valid inputs. This allows the implementation to support arbitrary array lengths while preserving the correctness requirements of the bitonic network.
+A first important design choice is the padding strategy for arbitrary input sizes. Bitonic Sort requires the logical problem size to be a power of two, so the host code computes the next power of two using \texttt{next\_power\_of\_two()}. It then allocates a host-side buffer of that padded length and initializes the extra entries to \texttt{INT\_MAX}. The original data are copied into the prefix of this buffer, transferred to the device, sorted, and finally only the first \texttt{original\_size} elements are copied back into the user-visible array. Padding with \texttt{INT\_MAX} is a particularly clean choice for ascending order because these sentinel values naturally migrate to the end of the sorted sequence and therefore do not disturb the ordering of valid inputs. This allows the implementation to support arbitrary array lengths while preserving the correctness requirements of the bitonic network and input with power of two low overhead and input with no power of 2 moderate overhead.
 
 A second major design choice is the explicit use of shared memory to accelerate the early stages of the sorting network. The kernel \texttt{shared\_bitonic\_tile\_kernel} assigns each block a tile of $2 \times \texttt{block\_size}$ elements, loads that tile into \texttt{\_\_shared\_\_} memory, performs the complete local bitonic schedule there, and writes the results back to global memory. Because shared memory has substantially lower latency than global memory, this optimization reduces the cost of the dense compare-exchange operations that occur in the initial stages, where all compare partners remain within the same tile. The kernel also pads out-of-range tile entries with \texttt{INT\_MAX}, which preserves correctness at the boundaries of the padded array.
 
@@ -124,5 +130,46 @@ Conversely, Bitonic Sort is a data-independent sorting network. It performs the 
 
 \section{Conclusion}
 This project successfully validated the implementation of OpenMP and CUDA sorting algorithms against a serial baseline. The experiment matrix confirmed that while CPU parallelism (OpenMP) is effective for moderate workloads, it is ultimately constrained by serial merge bottlenecks. GPU acceleration (CUDA) utilizing sorting networks like Bitonic Sort provides superior scaling for massive datasets, provided the compute gains outweigh the host-to-device memory transfer overhead.
+
+
+% \begin{document}
+
+\begin{longtable}{|>{\raggedright\arraybackslash}p{4cm}|>{\raggedright\arraybackslash}p{3cm}|>{\raggedright\arraybackslash}p{3cm}|>{\raggedright\arraybackslash}p{3cm}|}
+\caption{Task Assignment Among Team Members}
+\label{tab:task_assignment} \\
+\hline
+\rowcolor{gray!20}
+\textbf{Task} & \textbf{Mahmoud Atef } & \textbf{Abdulrahman Osama} & \textbf{Mohamed Alaa} \\
+\hline
+\endfirsthead
+
+\multicolumn{4}{c}%
+{{\bfseries \tablename\ \thetable{} -- Continued from previous page}} \\
+\hline
+\rowcolor{gray!20}
+\textbf{Task} & \textbf{Mahmoud Atef} & \textbf{Abdulrahman Osama} & \textbf{Mohamed Alaa } \\
+\hline
+\endhead
+
+\hline
+\multicolumn{4}{r}{\textit{Continued on next page}} \\
+\endfoot
+
+\hline
+\endlastfoot
+
+omp code and serial & 30\% & 30\% & 40\% \\
+\hline
+cuda bitonic sort & 40\% & 30\% & 30\% \\
+\hline
+Project report & 30\% & 40\% & 30\% \\
+\hline
+plotting data & 40\% & 30\% & 30\% \\
+\hline
+storing data in csv & 30\% & 30\% & 40\% \\
+
+\end{longtable}
+
+% \end{document}
 
 \end{document}
